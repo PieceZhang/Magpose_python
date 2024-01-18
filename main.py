@@ -16,6 +16,26 @@ import yaml
 
 # create .exe: pyinstaller -F main.py
 
+
+def DectoHex(dec):
+    if 9 >= dec >= 0:
+        return f'{dec}'
+    elif dec == 10:
+        return 'a'
+    elif dec == 11:
+        return 'b'
+    elif dec == 12:
+        return 'c'
+    elif dec == 13:
+        return 'd'
+    elif dec == 14:
+        return 'e'
+    elif dec == 15:
+        return 'f'
+    else:
+        raise ValueError
+
+
 class CMDUI(object):
     def __init__(self):
         self.runflag = True
@@ -33,7 +53,7 @@ class CMDUI(object):
             default_config = {
                 'baundrate': 256000,
                 'rxlength': 160,
-                'useADCnum': 3,
+                'SensorNum': 16,
                 'savedir': './Receive',
                 'csvmask': 0
             }
@@ -46,7 +66,7 @@ class CMDUI(object):
                 file.writelines("# 请严格遵守yaml文件格式，如遇错误请删除此文件并重启程序\n")
                 file.writelines("# baundrate: 波特率(默认256000)\n")
                 file.writelines("# rxlength: 数据帧长度(默认80)\n")
-                file.writelines("# useADCnum: 使用ADC的数量(默认3)\n")
+                file.writelines("# SensorNum: 使用ADC的数量\n")
                 file.writelines("# savedir: csv文件保存路径(默认./Receive)\n")
                 file.writelines("# csvmask: csv储存通道屏蔽列表，1~32(max)，0为禁用，例如：\n#csvmask:\n#- 1\n#- 2\n#- 3\n")
 
@@ -55,7 +75,7 @@ class CMDUI(object):
             config = yaml.load(file.read(), Loader=yaml.Loader)
             self.baundrate = config['baundrate']
             self.rxlength = config['rxlength']
-            self.useADCnum = config['useADCnum']
+            self.SensorNum = config['SensorNum']
             self.savedir = config['savedir']
             self.csvmask = config['csvmask']
             print("读取配置文件成功.\n如需更改配置参数，请手动修改config.yaml文件.")
@@ -65,7 +85,7 @@ class CMDUI(object):
             self.csvmask = []
 
         self.plottimer = [0]  # 绘图的横坐标(时间t, 单位min)
-        self.period_save = 30  # 自动保存周期, 单位sec
+        self.period_save = 10  # 自动保存周期, 单位sec
         self.period_plot = 1  # 绘图更新周期, 单位sec
         self.flag_plot = False
         self.period_display = 300  # 绘图显示长度，单位sec
@@ -77,7 +97,7 @@ class CMDUI(object):
         while not self.com:
             self._connect()
         '''接收前初始化'''
-        keyboard.add_hotkey('esc', self.__hotkey_esc)  # 设置热键
+        # keyboard.add_hotkey('esc', self.__hotkey_esc)  # 设置热键
         schedule.every(self.period_save).seconds.do(self.__auto_saving)  # 设置定时执行: 自动保存csv
         # schedule.every(self.period_plot).seconds.do(self.__flag_plot_True)  # 设置定时执行: 更新图像
         self.savedir_init()  # 初始化保存路径
@@ -107,7 +127,7 @@ class CMDUI(object):
             if rxdata[:4] != 'aaaa':
                 return
             print("\rReceive: {}... ({}bytes/{:.3f}s, using {} ADCs)".format(rxdata[0:80], self.rxlength, round(time.time() - counter, 3),
-                                                                             self.useADCnum), end='')
+                                                                             self.SensorNum), end='')
         except serial.serialutil.SerialException:  # 若连接中断
             self.com = None
             print("\r[ERROR] Connection lost! Please check your cable and connection! Trying to reconnect...")
@@ -127,31 +147,23 @@ class CMDUI(object):
         解码数据，保存csv
         :return:
         """
-        locater1 = str(rxdata).find('aaaafff1') + 8
-        locater2 = str(rxdata).find('aaaafff2') + 8
-        locater3 = str(rxdata).find('aaaafff3') + 8
-        locater4 = str(rxdata).find('aaaafff4') + 8
-        rx1 = str(rxdata[locater1:locater2 - 8])
-        rx2 = str(rxdata[locater2:locater3 - 8])
-        rx3 = str(rxdata[locater3:locater4 - 8])
-        rx4 = str(rxdata[locater4:])
-        # x[2:]+x[:2]: abcd->cdab, /6553.5: transform to floatpoint number, findall(r'.{4}', rx1): split str every 4 char
-        rx1 = list(map(lambda x: round(int(x[2:] + x[:2], 16), 6), re.findall(r'.{4}', rx1)))
-        rx2 = list(map(lambda x: round(int(x[2:] + x[:2], 16), 6), re.findall(r'.{4}', rx2)))
-        rx3 = list(map(lambda x: round(int(x[2:] + x[:2], 16), 6), re.findall(r'.{4}', rx3)))
-        rx4 = list(map(lambda x: round(int(x[2:] + x[:2], 16), 6), re.findall(r'.{4}', rx4)))
-        rx1 = list(map(lambda x: x / 6553.5 if x <= 32767 else (x - 65535) / 6553.5, rx1))
-        rx2 = list(map(lambda x: x / 6553.5 if x <= 32767 else (x - 65535) / 6553.5, rx2))
-        rx3 = list(map(lambda x: x / 6553.5 if x <= 32767 else (x - 65535) / 6553.5, rx3))
-        rx4 = list(map(lambda x: x / 6553.5 if x <= 32767 else (x - 65535) / 6553.5, rx4))
-        self.ADC1 = rx1 if len(rx1) == 8 else [0, 0, 0, 0, 0, 0, 0, 0]
-        self.ADC2 = rx2 if len(rx2) == 8 else [0, 0, 0, 0, 0, 0, 0, 0]
-        self.ADC3 = rx3 if len(rx3) == 8 else [0, 0, 0, 0, 0, 0, 0, 0]
-        self.ADC4 = rx4 if len(rx4) == 8 else [0, 0, 0, 0, 0, 0, 0, 0]
+        locater = []
+        for i in range(self.SensorNum):
+            locater.append(str(rxdata).find(f'aaaa0{DectoHex(i)}00') + 8)
+        rx = []
+        for i, loc in enumerate(locater):
+            if i < len(locater) - 1:
+                rx.append(str(rxdata[locater[i]:locater[i + 1] - 8]))
+            else:
+                rx.append(str(rxdata[locater[i]:]))
+            # x[2:]+x[:2]: abcd->cdab, /6553.5: transform to floatpoint number, findall(r'.{4}', rx1): split str every 4 char
+            rx[-1] = list(map(lambda x: round(int(x[2:] + x[:2], 16), 6), re.findall(r'.{4}', rx[-1])))
+            rx[-1] = list(map(lambda x: x / 6553.5 if x <= 32767 else (x - 65535) / 6553.5, rx[-1]))
+
         try:
             csvdata = []
-            for x in range(self.useADCnum):
-                csvdata += [self.ADC1, self.ADC2, self.ADC3, self.ADC4][x]
+            for x in range(self.SensorNum):
+                csvdata += rx[x]
             for x in self.csvmask:
                 del csvdata[x - 1]
             self._save_tocsv(csvdata)
@@ -232,7 +244,7 @@ class CMDUI(object):
             #     plt.scatter(self.plottimer[-1], x, color=cnames[i])
             # plt.pause(0.001)
             '''折线图'''
-            for ADCi, ADC in enumerate([self.ADC1, self.ADC2, self.ADC3, self.ADC4][0:self.useADCnum]):
+            for ADCi, ADC in enumerate([self.ADC1, self.ADC2, self.ADC3, self.ADC4][0:self.SensorNum]):
                 try:
                     for datai, data in enumerate(ADC):
                         self.plotdata[ADCi * 8 + datai].append(data)
