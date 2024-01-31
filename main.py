@@ -3,7 +3,7 @@ import serial  # package name: pyserial
 from serial.tools.list_ports import comports
 import os
 import time
-# import keyboard
+import keyboard
 # import tkinter.messagebox
 # import tkinter
 import matplotlib.pyplot as plt
@@ -98,13 +98,18 @@ class CMDUI(object):
         self.SensorNum = default_config['SensorNum']
         self.savedir = default_config['savedir']
         self.csvmask = default_config['csvmask']
+        if type(self.csvmask) is list and len(self.csvmask) > 0:
+            self.csvmask.sort(reverse=True)
+        else:
+            self.csvmask = []
 
         self.plottimer = [0]  # 绘图的横坐标(时间t, 单位min)
         self.period_save = 10  # 自动保存周期, 单位sec
-        self.period_plot = 0.4  # 绘图更新周期, 单位sec
+        self.period_plot = 0.2  # 绘图更新周期, 单位sec
         self.flag_plot = False
         self.period_display = 60  # 绘图显示长度，单位sec
         self.plotdata = [[0] for x in range(32)]  # 绘图数据
+        self.savebuf = []
 
     def run(self):
         '''连接串口'''
@@ -112,11 +117,13 @@ class CMDUI(object):
         while not self.com:
             self._connect()
         '''接收前初始化'''
-        # keyboard.add_hotkey('esc', self.__hotkey_esc)  # 设置热键
+        # keyboard.add_hotkey('esc', self.__hotkey_esc)
+        keyboard.add_hotkey('q', self.__hotkey_quit)
+        keyboard.add_hotkey('w', self.__hotkey_save)
         schedule.every(self.period_save).seconds.do(self.__auto_saving)  # 设置定时执行: 自动保存csv
         schedule.every(self.period_plot).seconds.do(self.__flag_plot_True)  # 设置定时执行: 更新图像
-        self.savedir_init()  # 初始化保存路径
         plt.ion()  # interactive mode on (不同于MATLAB的hold on)
+        self.savedir_init()  # 初始化保存路径
         '''开始接收'''
         print("===== Start Receiving =====")
         while self.runflag:
@@ -141,7 +148,7 @@ class CMDUI(object):
             rxdata = self.com.read(self.rxlength).hex()  # 转换为十六进制
             if rxdata[:4] != 'aaaa':
                 return
-            print("\rReceive: {}... ({}bytes/{:.3f}s, using {} ADCs)".format(rxdata[0:80], self.rxlength, round(time.time() - counter, 3),
+            print("\rReceive: {}... ({}bytes/{:.3f}s, using {} ADCs)".format(rxdata[0:40], self.rxlength, round(time.time() - counter, 3),
                                                                              self.SensorNum), end='')
         except serial.serialutil.SerialException:  # 若连接中断
             self.com = None
@@ -175,27 +182,25 @@ class CMDUI(object):
             rx[-1] = list(map(lambda x: round(int(x[2:] + x[:2], 16), 6), re.findall(r'.{4}', rx[-1])))
             rx[-1] = list(map(lambda x: x / 6553.5 if x <= 32767 else (x - 65535) / 6553.5, rx[-1]))
 
-        try:
-            csvdata = []
-            for x in range(self.SensorNum):
-                csvdata += rx[x]
-            for x in self.csvmask:
-                del csvdata[x - 1]
-            self._save_tocsv(csvdata)
-            if self.flag_plot is True:
-                self._update_plot(rx)
-                self.flag_plot = False
-        except TypeError:
-            # TypeError: unsupported operand type(s) for +: 'NoneType' and 'NoneType'
-            # 开启后第一次存储可能会接收失败
-            pass
+        csvdata = []
+        for x in range(self.SensorNum):
+            csvdata += rx[x]
+        for x in self.csvmask:
+            del csvdata[x - 1]
+
+        self.savebuf = csvdata
+        # self._save_tocsv(csvdata)  # save every datapoints to csv
+
+        if self.flag_plot is True:
+            self._update_plot(rx)
+            self.flag_plot = False
 
     def _save_tocsv(self, data):
         try:
-            self.csvwriter.writerow(data)  # 写入一行
+            self.csvwriter.writerow(data)  # save every datapoints to csv
         except ValueError:
             if self.runflag:
-                print("\n[ERROR] CSV file saving error! Maybe it has been closed.\n")
+                print("\n[ERROR] CSV file save error\n")
 
     def _write(self):
         # result = self.com.write(" ".encode("gbk"))
@@ -219,7 +224,7 @@ class CMDUI(object):
             else:  # 若存在多个串口
                 self.comname = comcandidate = ''
                 for item in comlist:
-                    print(item[0], item)  # 打印出所有可用的串口，引导用户做出选择
+                    print(item[0], item)  # 打印出所有可用的串口
                     comcandidate = comcandidate + str(item[0])
                 while self.comname == '':
                     self.comname = input("[INPUT] Which one to choose? Please type in a COM (for example: COM1):")
@@ -300,6 +305,18 @@ class CMDUI(object):
     #         self.csvfile.close()
     #         self.stop_receive()
     #         # sys.exit()  # 只能退出tk进程，无法退出主进程
+
+    def __hotkey_save(self):
+        try:
+            self.csvwriter.writerow([datetime.datetime.strftime(datetime.datetime.now(), '%Y-%m-%d_%H:%M:%S')] + self.savebuf)
+            print(f"\n[INFO] One data saved at {datetime.datetime.strftime(datetime.datetime.now(), '%H:%M:%S')}\nU1:{self.savebuf[:3]} U16:{self.savebuf[-3:]}\n")
+        except ValueError:
+            if self.runflag:
+                print("\n[ERROR] CSV file save error\n")
+
+    def __hotkey_quit(self):
+        self.csvfile.close()
+        self.stop_receive()
 
 
 if __name__ == '__main__':
