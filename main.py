@@ -3,15 +3,15 @@ import serial  # package name: pyserial
 from serial.tools.list_ports import comports
 import os
 import time
-import keyboard
-import tkinter.messagebox
-import tkinter
+# import keyboard
+# import tkinter.messagebox
+# import tkinter
 import matplotlib.pyplot as plt
 import re
 import csv
 import datetime
 import schedule
-import yaml
+# import yaml
 
 
 # create .exe: pyinstaller -F main.py
@@ -49,46 +49,61 @@ class CMDUI(object):
         self.csvfilename = None  # csv文件名
         self.csvwriter = None  # csv writer
 
-        if not os.path.exists("config.yaml"):  # 若不存在配置文件
-            default_config = {
-                'baundrate': 256000,
-                'rxlength': 160,
-                'SensorNum': 16,
-                'savedir': './Receive',
-                'csvmask': 0
-            }
-            print("配置文件不存在，已在程序根目录创建配置文件config.yaml，使用默认配置:")
-            print(default_config)
-            with open("config.yaml", "w", encoding="utf-8") as file:
-                yaml.dump(default_config, file)
-            with open("config.yaml", "a", encoding="utf-8") as file:
-                file.writelines("\n##############################\n")
-                file.writelines("# 请严格遵守yaml文件格式，如遇错误请删除此文件并重启程序\n")
-                file.writelines("# baundrate: 波特率(默认256000)\n")
-                file.writelines("# rxlength: 数据帧长度(默认80)\n")
-                file.writelines("# SensorNum: 使用ADC的数量\n")
-                file.writelines("# savedir: csv文件保存路径(默认./Receive)\n")
-                file.writelines("# csvmask: csv储存通道屏蔽列表，1~32(max)，0为禁用，例如：\n#csvmask:\n#- 1\n#- 2\n#- 3\n")
+        """use yaml"""
+        # if not os.path.exists("config.yaml"):  # 若不存在配置文件
+        #     default_config = {
+        #         'baundrate': 256000,
+        #         'rxlength': 160,
+        #         'SensorNum': 16,
+        #         'savedir': './Receive',
+        #         'csvmask': 0
+        #     }
+        #     print("配置文件不存在，已在程序根目录创建配置文件config.yaml，使用默认配置:")
+        #     print(default_config)
+        #     with open("config.yaml", "w", encoding="utf-8") as file:
+        #         yaml.dump(default_config, file)
+        #     with open("config.yaml", "a", encoding="utf-8") as file:
+        #         file.writelines("\n##############################\n")
+        #         file.writelines("# 请严格遵守yaml文件格式，如遇错误请删除此文件并重启程序\n")
+        #         file.writelines("# baundrate: 波特率(默认256000)\n")
+        #         file.writelines("# rxlength: 数据帧长度(默认80)\n")
+        #         file.writelines("# SensorNum: 使用ADC的数量\n")
+        #         file.writelines("# savedir: csv文件保存路径(默认./Receive)\n")
+        #         file.writelines("# csvmask: csv储存通道屏蔽列表，1~32(max)，0为禁用，例如：\n#csvmask:\n#- 1\n#- 2\n#- 3\n")
+        #
+        # with open('config.yaml', 'r', encoding='utf-8') as file:  # 读取配置文件
+        #     print("正在读取配置文件... 如遇错误，请删除config.yaml并重启程序.")
+        #     config = yaml.load(file.read(), Loader=yaml.Loader)
+        #     self.baundrate = config['baundrate']
+        #     self.rxlength = config['rxlength']
+        #     self.SensorNum = config['SensorNum']
+        #     self.savedir = config['savedir']
+        #     self.csvmask = config['csvmask']
+        #     print("读取配置文件成功.\n如需更改配置参数，请手动修改config.yaml文件.")
+        # if type(self.csvmask) is list and len(self.csvmask) > 0:
+        #     self.csvmask.sort(reverse=True)
+        # else:
+        #     self.csvmask = []
 
-        with open('config.yaml', 'r', encoding='utf-8') as file:  # 读取配置文件
-            print("正在读取配置文件... 如遇错误，请删除config.yaml并重启程序.")
-            config = yaml.load(file.read(), Loader=yaml.Loader)
-            self.baundrate = config['baundrate']
-            self.rxlength = config['rxlength']
-            self.SensorNum = config['SensorNum']
-            self.savedir = config['savedir']
-            self.csvmask = config['csvmask']
-            print("读取配置文件成功.\n如需更改配置参数，请手动修改config.yaml文件.")
-        if type(self.csvmask) is list and len(self.csvmask) > 0:
-            self.csvmask.sort(reverse=True)
-        else:
-            self.csvmask = []
+        """not use yaml"""
+        default_config = {
+            'baundrate': 256000,
+            'rxlength': 160,
+            'SensorNum': 16,
+            'savedir': './Receive',
+            'csvmask': 0
+        }
+        self.baundrate = default_config['baundrate']
+        self.rxlength = default_config['rxlength']
+        self.SensorNum = default_config['SensorNum']
+        self.savedir = default_config['savedir']
+        self.csvmask = default_config['csvmask']
 
         self.plottimer = [0]  # 绘图的横坐标(时间t, 单位min)
         self.period_save = 10  # 自动保存周期, 单位sec
-        self.period_plot = 1  # 绘图更新周期, 单位sec
+        self.period_plot = 0.4  # 绘图更新周期, 单位sec
         self.flag_plot = False
-        self.period_display = 300  # 绘图显示长度，单位sec
+        self.period_display = 60  # 绘图显示长度，单位sec
         self.plotdata = [[0] for x in range(32)]  # 绘图数据
 
     def run(self):
@@ -99,9 +114,9 @@ class CMDUI(object):
         '''接收前初始化'''
         # keyboard.add_hotkey('esc', self.__hotkey_esc)  # 设置热键
         schedule.every(self.period_save).seconds.do(self.__auto_saving)  # 设置定时执行: 自动保存csv
-        # schedule.every(self.period_plot).seconds.do(self.__flag_plot_True)  # 设置定时执行: 更新图像
+        schedule.every(self.period_plot).seconds.do(self.__flag_plot_True)  # 设置定时执行: 更新图像
         self.savedir_init()  # 初始化保存路径
-        # plt.ion()  # interactive mode on (不同于MATLAB的hold on)
+        plt.ion()  # interactive mode on (不同于MATLAB的hold on)
         '''开始接收'''
         print("===== Start Receiving =====")
         while self.runflag:
@@ -168,7 +183,7 @@ class CMDUI(object):
                 del csvdata[x - 1]
             self._save_tocsv(csvdata)
             if self.flag_plot is True:
-                self._update_plot()
+                self._update_plot(rx)
                 self.flag_plot = False
         except TypeError:
             # TypeError: unsupported operand type(s) for +: 'NoneType' and 'NoneType'
@@ -228,7 +243,7 @@ class CMDUI(object):
             print("[ERROR] COM does not exist! Press Enter to retry.")
             os.system('pause')
 
-    def _update_plot(self):
+    def _update_plot(self, rx):
         """
         更新绘图
         """
@@ -244,16 +259,16 @@ class CMDUI(object):
             #     plt.scatter(self.plottimer[-1], x, color=cnames[i])
             # plt.pause(0.001)
             '''折线图'''
-            for ADCi, ADC in enumerate([self.ADC1, self.ADC2, self.ADC3, self.ADC4][0:self.SensorNum]):
+            for i, sensor in enumerate([rx[0], rx[-1]]):  # only draw fig for U1 and U16
                 try:
-                    for datai, data in enumerate(ADC):
-                        self.plotdata[ADCi * 8 + datai].append(data)
+                    for datai, data in enumerate(sensor):
+                        self.plotdata[i * 8 + datai].append(data)
                         if len(self.plottimer) > self.period_display:
                             plt.plot(self.plottimer[:self.period_display],
-                                     self.plotdata[ADCi * 8 + datai][len(self.plotdata[ADCi * 8 + datai]) - self.period_display - 1:-1],
-                                     color=cnames[ADCi * 8 + datai])
+                                     self.plotdata[i * 8 + datai][len(self.plotdata[i * 8 + datai]) - self.period_display - 1:-1],
+                                     color=cnames[i * 8 + datai])
                         else:
-                            plt.plot(self.plottimer, self.plotdata[ADCi * 8 + datai], color=cnames[ADCi * 8 + datai])
+                            plt.plot(self.plottimer, self.plotdata[i * 8 + datai], color=cnames[i * 8 + datai])
                 except TypeError:
                     print('[ERROR] Plot error!')
             plt.pause(0.001)
@@ -273,24 +288,23 @@ class CMDUI(object):
         # Thread(target=shutil.copy, args=[self.savedir+'/'+self.csvfilename, self.savedir+'/'+self.csvfilename+'.{}.bkp'.
         #        format(datetime.datetime.strftime(datetime.datetime.now(),'%Y-%m-%d_%H-%M-%S'))]).start()
 
-    def __hotkey_esc(self):
-        """
-        热键函数，按键弹窗，不会阻塞主进程
-        """
-        top = tkinter.Tk()
-        top.geometry('0x0+999999+0')
-        res = tkinter.messagebox.askyesno("提示", "要执行此操作？")
-        top.destroy()
-        if res is True:
-            self.csvfile.close()
-            self.stop_receive()
-            # sys.exit()  # 只能退出tk进程，无法退出主进程
+    # def __hotkey_esc(self):
+    #     """
+    #     热键函数，按键弹窗，不会阻塞主进程
+    #     """
+    #     top = tkinter.Tk()
+    #     top.geometry('0x0+999999+0')
+    #     res = tkinter.messagebox.askyesno("提示", "要执行此操作？")
+    #     top.destroy()
+    #     if res is True:
+    #         self.csvfile.close()
+    #         self.stop_receive()
+    #         # sys.exit()  # 只能退出tk进程，无法退出主进程
 
 
 if __name__ == '__main__':
     print("\n====================================================================")
-    print("\n注意！程序目录不能有中文！")
-    print("\nNotice! No Chinese in the directory! ")
+    print("\nNo Chinese in the directory of this program!")
     print("\n====================================================================\n\n")
     ui = CMDUI()
     ui.run()
