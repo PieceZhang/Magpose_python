@@ -41,10 +41,10 @@ class CMDUI(object):
         self.runflag = True
         self.comname = None  # 当前串口号
         self.com = None  # com类
-        self.ADC1 = None  # ADC1解码后
-        self.ADC2 = None  # ADC2解码后
-        self.ADC3 = None  # ADC3解码后
-        self.ADC4 = None  # ADC4解码后
+        # self.ADC1 = None  # ADC1解码后
+        # self.ADC2 = None  # ADC2解码后
+        # self.ADC3 = None  # ADC3解码后
+        # self.ADC4 = None  # ADC4解码后
         self.csvfile = None  # csv文件
         self.csvfilename = None  # csv文件名
         self.csvwriter = None  # csv writer
@@ -180,7 +180,8 @@ class CMDUI(object):
                 rx.append(str(rxdata[locater[i]:]))
             # x[2:]+x[:2]: abcd->cdab, /6553.5: transform to floatpoint number, findall(r'.{4}', rx1): split str every 4 char
             rx[-1] = list(map(lambda x: round(int(x[2:] + x[:2], 16), 6), re.findall(r'.{4}', rx[-1])))
-            rx[-1] = list(map(lambda x: x / 6553.5 if x <= 32767 else (x - 65535) / 6553.5, rx[-1]))
+            # rx[-1] = list(map(lambda x: x / 6553.5 if x <= 32767 else (x - 65535) / 6553.5, rx[-1]))
+            rx[-1] = list(map(lambda x: x / 1711 if x <= 32767 else (x - 65535) / 1711, rx[-1]))  # scale: 16G, divided by 1711
 
         csvdata = []
         for x in range(self.SensorNum):
