@@ -75,7 +75,7 @@ class CMDUI(object):
         """not use yaml"""
         default_config = {
             'baundrate': 256000,
-            'SensorNum': 32,
+            'SensorNum': 256,
             'savedir': './Receive',
             'csvmask': 0
         }
@@ -132,7 +132,11 @@ class CMDUI(object):
         try:  # 尝试接收
             counter = time.time()
             rxdata = self.com.read(self.rxlength).hex()  # 转换为十六进制
-            if rxdata[:4] != 'aaaa':
+            if rxdata[:8] != 'aaaa0000':
+                print("\r[ERROR] Data error: {}. Retrying...".format(rxdata[0:40]), end='')
+                while self.com.in_waiting:  # clear com buffert
+                    self.com.read(self.com.in_waiting)
+                time.sleep(0.5)
                 return
             print("\rReceive: {}... ({}bytes/{:.3f}s, using {} Sensors)".format(rxdata[0:40], self.rxlength, round(time.time() - counter, 3),
                                                                              self.SensorNum), end='')
@@ -157,7 +161,10 @@ class CMDUI(object):
         """
         locater = []
         for i in range(self.SensorNum):
-            locater.append(str(rxdata).find(f'aaaa{DectoHex(i)}00') + 8)
+            nextloc = str(rxdata).find(f'aaaa{DectoHex(i)}00') + 8
+            if i > 0 and nextloc - locater[-1] != 20:
+                nextloc = locater[-1] + 20
+            locater.append(nextloc)
         rx = []
         for i, loc in enumerate(locater):
             if i < len(locater) - 1:
@@ -278,6 +285,7 @@ class CMDUI(object):
                     plt.plot(self.plottimer, self.plotdata[i], color=cnames[i])
             except:
                 print('[ERROR] Plot error!')
+        plt.title(f'Only show the first value of {self.SensorNum} sensors')
         plt.grid()
         plt.pause(0.001)
 
