@@ -98,19 +98,18 @@ class CMDUI(object):
         self.savebuf = []
 
     def run(self):
-        '''连接串口'''
         print("===== System Start =====")
         while not self.com:
             self._connect()
-        '''接收前初始化'''
+
         # keyboard.add_hotkey('esc', self.__hotkey_esc)
         keyboard.add_hotkey('q', self.__hotkey_quit)
         keyboard.add_hotkey('w', self.__hotkey_save)
         schedule.every(self.period_save).seconds.do(self.__auto_saving)  # 设置定时执行: 自动保存csv
         schedule.every(self.period_plot).seconds.do(self.__flag_plot_True)  # 设置定时执行: 更新图像
         plt.ion()  # interactive mode on (不同于MATLAB的hold on)
-        self.savedir_init()  # 初始化保存路径
-        '''开始接收'''
+        self.savedir_init()
+
         print("===== Start Receiving =====")
         while self.runflag:
             self._receive()
@@ -129,9 +128,9 @@ class CMDUI(object):
         print("[INFO] Receive start from {}, save as {}/{}".format(csvfiletime, self.savedir, self.csvfilename))
 
     def _receive(self):
-        try:  # 尝试接收
+        try:
             counter = time.time()
-            rxdata = self.com.read(self.rxlength).hex()  # 转换为十六进制
+            rxdata = self.com.read(self.rxlength).hex()
             if rxdata[:8] != 'aaaa0000':
                 print("\r[ERROR] Data error: {}. Retrying...".format(rxdata[0:40]), end='')
                 while self.com.in_waiting:  # clear com buffert
@@ -140,23 +139,23 @@ class CMDUI(object):
                 return
             print("\rReceive: {}... ({}bytes/{:.3f}s, using {} Sensors)".format(rxdata[0:40], self.rxlength, round(time.time() - counter, 3),
                                                                              self.SensorNum), end='')
-        except serial.serialutil.SerialException:  # 若连接中断
+        except serial.serialutil.SerialException:
             self.com = None
             print("\r[ERROR] Connection lost! Please check your cable and connection! Trying to reconnect...")
-            while not self.com:  # 尝试重连
+            while not self.com:
                 try:
                     self.com = serial.Serial(self.comname, self.baundrate, timeout=1)
                 except serial.serialutil.SerialException:
                     time.sleep(0.01)
                 else:
                     print("[INFO] Successfully reconnect to {} at {} baundrate!".format(self.comname, self.baundrate))
-        else:  # 若接收成功
-            if rxdata:  # 若rxdata不为空
+        else: 
+            if rxdata:
                 self._decode_display(rxdata)
 
     def _decode_display(self, rxdata):
         """
-        解码数据，保存csv
+        decode, save csv
         :return:
         """
         locater = []
@@ -204,22 +203,22 @@ class CMDUI(object):
 
     def _connect(self):
         comlist = list(comports())
-        if len(comlist):  # 若存在可用串口
-            '''选择串口'''
+        if len(comlist):
+            # select com
             comlist = list(map(lambda x: list(x), comlist))
             print("[INFO] Available COMs are listed below:")
-            if len(comlist) == 1 & str(comlist[0][1]).find('CH340') != -1:  # 若只存在一个串口且是CH340
-                print(comlist)  # 打印出所有可用的串口，选择描述为“USB-SERIAL CH340”的设备
+            if len(comlist) == 1 & str(comlist[0][1]).find('CH340') != -1:
+                print(comlist) 
                 self.comname = comlist[0][0]
                 print("[INFO] Use {}.".format(self.comname))
-            elif len(comlist) == 1 & str(comlist[0][1]).find('CH340') == -1:  # 若只存在一个串口且但不是CH340
-                print(comlist)  # 打印出所有可用的串口
+            elif len(comlist) == 1 & str(comlist[0][1]).find('CH340') == -1: 
+                print(comlist)
                 print('[ERROR] COM of CH340 is not found! Please check your connection or driver. Press Enter to retry.')
                 os.system('pause')
-            else:  # 若存在多个串口
+            else: 
                 self.comname = comcandidate = ''
                 for item in comlist:
-                    print(item[0], item)  # 打印出所有可用的串口
+                    print(item[0], item)
                     comcandidate = comcandidate + str(item[0])
                 while self.comname == '':
                     self.comname = input("[INPUT] Which one to choose? Please type in a COM (for example: COM1):")
@@ -228,7 +227,7 @@ class CMDUI(object):
                         self.comname = ''
                     else:
                         print("[INFO] Use {}.".format(self.comname))
-            '''尝试连接'''
+            # connect
             try:
                 print("[INFO] Try to connect to {} at {} baundrate...".format(self.comname, self.baundrate))
                 self.com = serial.Serial(self.comname, self.baundrate, timeout=1)
@@ -238,15 +237,12 @@ class CMDUI(object):
                 os.system('pause')
             else:
                 print("[INFO] Successfully connect to {} at {} baundrate!".format(self.comname, self.baundrate))
-                '''出口'''
-        else:  # 若不存在串口
+                # exit
+        else: 
             print("[ERROR] COM does not exist! Press Enter to retry.")
             os.system('pause')
 
     def _update_plot(self, rx):
-        """
-        更新绘图
-        """
         # Generate 256 distinct colors using a colormap
         colors = plt.cm.tab20(np.linspace(0, 1, self.SensorNum))  # Use a colormap like 'tab20' or 'viridis'
         # Convert RGBA to hexadecimal color codes for compatibility with Matplotlib
@@ -255,11 +251,12 @@ class CMDUI(object):
         plt.cla()
         self.plottimer.append(self.plottimer[-1] + self.period_plot)
 
-        '''散点图'''
+        ''' scatter '''
         # for i, x in enumerate(self.ADC1 + self.ADC2 + self.ADC3 + self.ADC4):
         #     plt.scatter(self.plottimer[-1], x, color=cnames[i])
         # plt.pause(0.001)
-        '''折线图'''
+        
+        ''' line '''
         # for i, sensordata in enumerate([rx[0], rx[-1]]):  # only draw fig for 3 values of the first and the last sensor (2*3=6 lines drawn)
         #     try:
         #         for datai, data in enumerate(sensordata):
@@ -275,6 +272,7 @@ class CMDUI(object):
         # plt.grid()
         # plt.pause(0.001)
 
+        ''' line for all'''
         for i, sensordata in enumerate(rx):  # draw fig for the first value of all sensor (sensornum*1 lines drawn)
             data = sensordata[0]
             try:
